@@ -1,11 +1,10 @@
 #include <stdio.h>
-double square_root( int n, double epsilon )
+double square_root( int n, double epsilon_UNUSED )
 {
     double a = (double) n;
     double x = 1;
 
     int i = 0;
-    // For loop to get the square root value of the entered number.
     for( i = 0; i < n; i++)
     {
         x = 0.5 * ( x+a / x );
