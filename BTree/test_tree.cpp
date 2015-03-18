@@ -59,6 +59,12 @@ void *threadTwo(void *arg)
     cout << endl;
 }
 
+void *threadFour(void *arg)
+{
+    Btree *t = (Btree *)arg;
+    t->printBFS();
+}
+
 void *threadThree(void *arg)
 {
     Btree *t= (Btree *)arg;
@@ -77,7 +83,7 @@ void *threadThree(void *arg)
 
 int main(void)
 {
-    pthread_t thr1, thr2, thr3;
+    pthread_t thr1, thr2, thr3, thr4;
     Btree t;
     //Spawn two threads and wait
 
@@ -85,7 +91,10 @@ int main(void)
     threadOne(&t);
     pthread_create(&thr2, NULL, threadTwo, &t);
     pthread_create(&thr3, NULL, threadThree, &t);
+    pthread_create(&thr4, NULL, threadFour, &t);
     //pthread_join(thr1, NULL); 
     pthread_join(thr2, NULL); 
     pthread_join(thr3, NULL); 
+    pthread_join(thr4, NULL); 
 }
+

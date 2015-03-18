@@ -3,6 +3,7 @@
 #include <iostream>
 #include <pthread.h>
 #include "btree.h"
+#include <queue>
 using namespace std;
 
 
@@ -266,4 +267,24 @@ void Btree::deleteNode(int data)
         //cerr << "Data " << data << " to be delete not found.." << endl;
     }
     return;
+}
+void Btree::printBFS()
+{
+    deque<node *> q;
+    q.push_back(mRoot);
+    node *tmp;
+    while(!q.empty())
+    {
+        if(tmp->left)
+        {
+            tmp = tmp->left;
+            q.push_back(tmp);
+        }
+        if(tmp->right)
+        {
+            tmp = tmp->right;
+            q.push_back(tmp);
+        }
+        cout << "Visited node -> " << q.pop() ;
+    }
 }

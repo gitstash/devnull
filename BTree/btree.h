@@ -29,4 +29,5 @@ class Btree
         void printTree();
         void updateNode(int oldData, int data);
         void deleteNode(int data);
+        void printBFS();
 };
