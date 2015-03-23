@@ -21,7 +21,6 @@ using namespace std;
 class Client
 {
     private:
-        //has ip add port and family
         struct sockaddr_in mServer;
         int  mSockfd;
         const string mEmail;
@@ -36,11 +35,10 @@ class Client
                          const char *dataBuf, uint32_t datalen);
     public:
         Client(string hostname, uint16_t port, string email);
-        //Client(string hostname, uint16_t port, string email, string outfile);
         ~Client();
         void startConnection();
         bool handshake();
         int getChunk(uint32_t *pseq, string &chunk);
-        bool saveChunk(string buf, uint32_t len);
+        //bool saveChunk(string buf, uint32_t len);
 };
 #endif // __CLIENT_H__

@@ -11,7 +11,6 @@ int main(void)
     string msgBuf;
     stringstream ss;
     try {
-        //Client c("Challenge2.airtime.com", 2323, "manishamails@gmail.com", "/tmp/data.pcm");
         Client c("Challenge2.airtime.com", 2323, "manishamails@gmail.com");
         Packetlist pktList;
 
@@ -36,7 +35,7 @@ int main(void)
         cout << std::nounitbuf;
         cout << endl;
 
-        pktList.printList();
+        //pktList.printList();
         pktList.serializeData("/tmp/data.pcm");
     }
     catch(runtime_error &re){

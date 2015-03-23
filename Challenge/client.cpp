@@ -30,15 +30,6 @@ Client::Client(string hostname, uint16_t port, string email):
     inet_ntop(AF_INET, (void *)&mServer.sin_addr, ss, sizeof ss);
     cout<<"DEBUG: server is "<< ss<<endl;
     mServer.sin_port = htons(port);
-
-    //open file for saving the chunk in case of valid data.
-#if 0
-    mOfsream.open(mOutFilePath.c_str(), ios::out | ios::binary); 
-    if (!mOfsream.is_open()) { 
-        errObj << "Error opening outfile " << endl;
-        throw runtime_error(errObj.str());
-    }
-#endif
 }
 
 
@@ -73,20 +64,28 @@ uint32_t Client::sendData(string msgBuf)
 uint32_t Client::receiveData(string &outBuf, uint32_t numByte)
 {
     stringstream errObj;
+    char msgBuf[numByte];
+    ssize_t n = 0;
+    size_t total = 0;
 
     outBuf.clear();
-    char msgBuf[numByte];
     memset(msgBuf, 0,  numByte);
 
-    ssize_t n = recv(mSockfd, msgBuf, numByte, 0);
+    while( (n = recv(mSockfd, msgBuf + total, numByte - total, 0)) > 0 ) {
+       total += n;
+       if( total == numByte )
+           break;
+    }
+
     if( n < 0 ){
-        errObj << "Error reading ...(errno: " << errno << " )" << endl;
+        errObj << "Error recv from socket ...(errno: " << errno << " )" << endl;
         throw runtime_error(errObj.str());
     }else if(n == 0)
-        cout << "\n<<<Server terminated connection >>>" << endl;
+        cout << "\n<<<Server closed connection >>>" << endl;
     else
-        outBuf.assign(msgBuf, n);
-    return n;
+        outBuf.assign(msgBuf, total);
+
+    return total;
 }
 
 string Client::parse(const string &msg)
@@ -98,27 +97,26 @@ string Client::parse(const string &msg)
 }
 bool Client::handshake()
 {
-    //char msgBuf[MAX_BUF];
-    string msgBuf;
+    char msgBuf[MAX_BUF];
+    char authcode[MAX_BUF];
+    int n = 0;
     stringstream ss;
-    if(!receiveData(msgBuf, MAX_BUF)) { 
+    if(!recv(mSockfd, msgBuf, MAX_BUF, 0)) 
         return false;
-    }
 
     string token = parse(msgBuf);
     ss << "IAM:" << token << ":" << mEmail << ":at\n"; 
     sendData(ss.str());
-    if(!receiveData(msgBuf, MAX_BUF))
+
+    if(!(n = recv(mSockfd, msgBuf, MAX_BUF, 0))) 
         return false;
 
-    //check if success
-    //if(strstr(msgBuf, "SUCCESS") == NULL)
-    //    return false;
-    if (msgBuf.compare(0, 7, "SUCCESS") != 0)
+    if( sscanf(msgBuf, "SUCCESS:%s\n", authcode) == EOF)
         return false;
 
-    //store auth code for later use, if any
-    mAuthCode = msgBuf;
+    //for future use
+    mAuthCode = authcode;
+
     return true;
 }
 
@@ -137,13 +135,9 @@ bool Client::handshake()
 int Client::getChunk(uint32_t *pseq, string &chunk)
 {
     uint32_t seq, csum, dataLen;
-    //char hdrBuf[4];
+    uint32_t n = 0, readLen = 0;
     string hdrBuf;
-
-    //char *dataBuf;
     string dataBuf;
-    uint32_t n = 0;
-    uint32_t readLen = 0;
 
     if(!pseq )
         return -1;
@@ -153,28 +147,30 @@ int Client::getChunk(uint32_t *pseq, string &chunk)
         return -1;
 
     //read sequence num
+    hdrBuf.clear();
     if(receiveData(hdrBuf, 4) < 4)
         return -1;
     memcpy(&seq, hdrBuf.c_str(), 4);
     *pseq = ntohl(seq);
 
     //read checksum
-    //memset(hdrBuf, 0, sizeof hdrBuf);
+    hdrBuf.clear();
     if(receiveData(hdrBuf, 4) < 4)
         return -1;
     memcpy(&csum, hdrBuf.c_str(), 4);
 
     //data len
-    //memset(hdrBuf, 0, sizeof hdrBuf);
+    hdrBuf.clear();
     if(receiveData(hdrBuf, 4) < 4)
         return -1;
 
     memcpy(&dataLen, hdrBuf.c_str(), 4);
     dataLen = ntohl(dataLen);
-    //cout << "-------Received len-------" << endl;
-    //cout << dataLen <<  endl;
 
     //data
+    if( (readLen = receiveData(dataBuf, dataLen)) < dataLen)
+        return -1;
+#if 0
     string tmpBuf;
     while(readLen < dataLen){
         n = receiveData(tmpBuf, dataLen - readLen);
@@ -187,18 +183,18 @@ int Client::getChunk(uint32_t *pseq, string &chunk)
 
     if(readLen < dataLen)
         cout << "Pkt seq#:" << ntohl(seq) << " readLen " << readLen << " Warning: pkt receipt truncated" << endl;
+#endif
 
     //validate checksum
-    if(isValidChecksum(csum, seq, dataBuf.c_str(), readLen)) {
-        //cout << "Pkt seq#:" << ntohl(seq) << " Valid checksum " << endl;
-        //chunk.clear();
-        //return 0;
-    } else {
-        //cout << "Pkt seq#:" << ntohl(seq) << " Checksum invalid" << endl;
+    if(!isValidChecksum(csum, seq, dataBuf.c_str(), readLen)) {
+#ifdef DEBUG
+        cout << "Pkt seq#:" << ntohl(seq) << "*** Checksum invalid ***" << endl;
+#endif
         chunk.clear();
         return 0;
     }
     chunk = dataBuf;
+
     return readLen;
 }
 
@@ -215,8 +211,10 @@ bool Client::saveChunk(string buf, uint32_t len)
 #endif
 
 //Calculate checksum in network-byte order
-bool Client::isValidChecksum(uint32_t csum, uint32_t seq,
-        const char *dataBuf, uint32_t len)
+bool Client::isValidChecksum(uint32_t csum,         // incoming csum in network-byte order
+                             uint32_t seq,          // pkt seq, network-byte order
+                             const char *dataBuf,   // binary data 
+                             uint32_t len)          // data-len, host-byte order
 {
     uint32_t checksum = 0, leftover = 0, i;
     uint32_t *pn = NULL;
@@ -225,7 +223,7 @@ bool Client::isValidChecksum(uint32_t csum, uint32_t seq,
     checksum = seq;
 
 #ifdef DEBUG
-    cout << "<<<data-len = " << len << ", num of while 32-bit chunks = " << num << ">>>" << endl;
+    cout << "Pkt# " << ntohl(seq) << ", data-len = " << len << ", num of while 32-bit chunks = " << num << ">>>" << endl;
 #endif
 
     pn = (uint32_t *)dataBuf;
