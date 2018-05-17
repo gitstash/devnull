@@ -1,0 +1,13 @@
+Problem: 
+
+1. Write a library providing an event producer/listener 
+
+framework. Create an event class that the library user can subclass. Create an event producer class that the 
+
+library user can use for his/her classes that can produce events. Create an event listener class that the library 
+
+user can use for his/her classes to respond to the event occurrences.
+
+2. Make it thread safe
+
+3. Write a test program or caller of this library.
